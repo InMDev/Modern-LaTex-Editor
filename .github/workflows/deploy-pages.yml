@@ -30,9 +30,11 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Build (Vite) with repo base path
+      - name: Build (Vite) with repo base path and WASM
         env:
           BASE_PATH: /Modern-LaTex-Editor/
+          VITE_USE_WASM_LATEX: 'true'
+          VITE_ENABLE_RTEX: 'false'
         run: npm run build
 
       - name: Add SPA fallback (404.html)
