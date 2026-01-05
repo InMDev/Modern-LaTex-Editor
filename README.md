@@ -2,6 +2,21 @@
 
 Bidirectional LaTeX and rich-text editor
 
+<p align="center">
+   <a href="https://inmdev.github.io/Modern-LaTex-Editor/">
+      <strong>Try now: Click Here</strong>
+   </a>
+   <br/>
+   <br/>
+   <img src="./assets/demo.png" alt="Modern LaTeX Editor demo" width="800" />
+
+</p>
+
+### Main Features:
+   <br/>
+   <img src="./assets/demo2.png" alt="Modern LaTeX Editor toolbar and preview" width="800" />
+   <br/>
+
 ## Getting Started
 
 1. Install dependencies:
