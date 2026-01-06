@@ -2,7 +2,7 @@
 
 A bidirectional LaTeX + rich-text editor with a visual toolbar, live preview, and one-click PDF export.
 
-- Live demo: https://inmdev.github.io/Modern-LaTex-Editor/
+- Live demo: https://inmdev.github.io/Modern-LaTeX-Editor/
 
 <p align="center">
   <img src="./assets/demo.png" alt="Modern LaTeX Editor demo" width="800" />
@@ -65,7 +65,7 @@ npm run build:pages
 npm run verify:pages
 ```
 
-Override the default Pages subpath (defaults to `/Modern-LaTex-Editor/`):
+Override the default Pages subpath (defaults to `/Modern-LaTeX-Editor/`):
 
 ```bash
 BASE_PATH=/your-repo-name/ npm run build:pages

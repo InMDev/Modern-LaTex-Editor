@@ -6,7 +6,7 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const viteCli = path.join(repoRoot, 'node_modules', 'vite', 'bin', 'vite.js');
 
-const DEFAULT_BASE_PATH = '/Modern-LaTex-Editor/';
+const DEFAULT_BASE_PATH = '/Modern-LaTeX-Editor/';
 const basePathRaw = process.env.BASE_PATH || DEFAULT_BASE_PATH;
 const basePath = basePathRaw.endsWith('/') ? basePathRaw : `${basePathRaw}/`;
 

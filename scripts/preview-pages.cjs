@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
   Minimal local preview to emulate GitHub Pages under a subpath.
-  - Serves dist/ under BASE_PATH (default: /Modern-LaTex-Editor/)
+  - Serves dist/ under BASE_PATH (default: /Modern-LaTeX-Editor/)
   - SPA fallback: non-asset routes return index.html
   - 404.html is served at BASE_PATH + '404.html'
 */
@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = process.env.PORT || 4174;
-const defaultPrefix = '/Modern-LaTex-Editor/';
+const defaultPrefix = '/Modern-LaTeX-Editor/';
 const rawPrefix = process.env.BASE_PATH || defaultPrefix;
 const PREFIX = rawPrefix.endsWith('/') ? rawPrefix : rawPrefix + '/';
 const ROOT = path.resolve(__dirname, '..', 'dist');

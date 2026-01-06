@@ -31,14 +31,14 @@ jobs:
 
       - name: Build (Vite) for GitHub Pages
         env:
-          BASE_PATH: /Modern-LaTex-Editor/
+          BASE_PATH: /Modern-LaTeX-Editor/
           VITE_USE_WASM_LATEX: 'true'
           VITE_ENABLE_RTEX: 'false'
         run: npm run build:pages
 
       - name: Verify Pages artifact
         env:
-          BASE_PATH: /Modern-LaTex-Editor/
+          BASE_PATH: /Modern-LaTeX-Editor/
         run: npm run verify:pages
 
       - name: Setup Pages

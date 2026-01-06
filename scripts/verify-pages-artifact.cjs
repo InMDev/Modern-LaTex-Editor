@@ -7,7 +7,7 @@ const distDir = path.join(repoRoot, 'dist');
 const indexHtmlPath = path.join(distDir, 'index.html');
 const notFoundPath = path.join(distDir, '404.html');
 
-const DEFAULT_BASE_PATH = '/Modern-LaTex-Editor/';
+const DEFAULT_BASE_PATH = '/Modern-LaTeX-Editor/';
 const basePathRaw = process.env.BASE_PATH || DEFAULT_BASE_PATH;
 const basePath = basePathRaw.endsWith('/') ? basePathRaw : `${basePathRaw}/`;
 
