@@ -4,6 +4,29 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+    /* Notion-like inline code */
+    .texure-inline-code {
+        display: inline-block;
+        padding: 0.08em 0.35em;
+        border-radius: 0.3em;
+        font-size: 0.9em;
+        line-height: 1.25;
+        background: rgba(135, 131, 120, 0.15);
+        border: 1px solid rgba(135, 131, 120, 0.22);
+        color: #eb5757;
+        white-space: pre-wrap;
+        word-break: break-word;
+        vertical-align: baseline;
+    }
+
+    /* Disable Tailwind Typography backticks around inline code */
+    .texure-inline-code::before,
+    .texure-inline-code::after {
+        content: none !important;
+    }
+}
+
 .latex-render-visual-editor {
     /* Closer to default LaTeX article (10pt Computer Modern-ish) */
     font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', 'Source Serif Pro', serif;

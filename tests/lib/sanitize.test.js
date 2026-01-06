@@ -60,6 +60,14 @@ describe('sanitizeEditorHtml', () => {
     expect(clean).not.toMatch(/expression\s*\(/i);
   });
 
+  it('drops unsafe length values for dimension styles', () => {
+    const dirty = `<p style="width: 1vh; height: 10px; margin-left: calc(1px);">x</p>`;
+    const clean = sanitizeEditorHtml(dirty);
+    expect(clean).not.toMatch(/width:\s*1vh/i);
+    expect(clean).not.toMatch(/margin-left:\s*calc/i);
+    expect(clean).toMatch(/height:\s*10px/i);
+  });
+
   it('preserves explicit contenteditable="false"', () => {
     const dirty = `<p contenteditable="false">x</p>`;
     const clean = sanitizeEditorHtml(dirty);
@@ -100,6 +108,36 @@ describe('sanitizeEditorHtml', () => {
     expect(clean).toMatch(/border-width:\s*0\.04em/i);
     expect(clean).not.toMatch(/background-image/i);
     expect(clean).not.toMatch(/url\s*\(/i);
+  });
+
+  it('drops unsafe KaTeX length values and non-solid borders', () => {
+    const dirty = [
+      `<span class="katex">`,
+      `  <span style="height:calc(1px);border-style:dotted;border-width:0.1em;"></span>`,
+      `</span>`,
+    ].join('');
+    const clean = sanitizeEditorHtml(dirty);
+    expect(clean).not.toMatch(/height:\s*calc/i);
+    expect(clean).not.toMatch(/border-style:\s*dotted/i);
+    expect(clean).toMatch(/border-width:\s*0\.1em/i);
+  });
+
+  it('preserves code block UI controls and texure data attrs', () => {
+    const dirty = [
+      `<div class="texure-codeblock" data-texure-code="a%0Ab" data-texure-code-lang="python" onclick="alert(1)" contenteditable="false">`,
+      `  <select onchange="alert(2)"><option value="python" selected data-bad="1">python</option></select>`,
+      `  <textarea>print(1)</textarea>`,
+      `</div>`,
+    ].join('');
+    const clean = sanitizeEditorHtml(dirty);
+    expect(clean).toContain('class="texure-codeblock"');
+    expect(clean).toContain('data-texure-code="a%0Ab"');
+    expect(clean).toContain('data-texure-code-lang="python"');
+    expect(clean).toContain('<select');
+    expect(clean).toMatch(/<option[^>]*value="python"[^>]*selected/i);
+    expect(clean).toContain('<textarea');
+    expect(clean).not.toMatch(/onclick|onchange/i);
+    expect(clean).not.toMatch(/data-bad/i);
   });
 });
 

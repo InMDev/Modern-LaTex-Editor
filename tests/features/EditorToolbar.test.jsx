@@ -2,35 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import EditorToolbar from '../../src/features/Toolbar/EditorToolbar.jsx';
+import { FEATURE_FLAGS } from '../../src/constants/flags';
 
-const baseFlags = {
-  showUndo: false,
-  showRedo: false,
-  showHeading1: false,
-  showHeading2: false,
-  showHeading3: false,
-  showHeading4: false,
-  showTitle: false,
-  showBold: false,
-  showItalic: false,
-  showUnderline: false,
-  showAlignLeft: false,
-  showAlignCenter: false,
-  showAlignRight: false,
-  showAlignJustify: false,
-  showInlineCode: false,
-  showCodeBlock: false,
-  showInlineMath: false,
-  showDisplayMath: false,
-  showUnorderedList: false,
-  showOrderedList: false,
-  showIndent: false,
-  showOutdent: false,
-  showLink: false,
-  showImage: false,
-};
-
-const allFlags = Object.fromEntries(Object.keys(baseFlags).map((k) => [k, true]));
+const baseFlags = Object.fromEntries(Object.keys(FEATURE_FLAGS).map((k) => [k, false]));
+const allFlags = Object.fromEntries(Object.keys(FEATURE_FLAGS).map((k) => [k, true]));
 
 describe('EditorToolbar', () => {
   it('does not render when topbar disabled', () => {
@@ -38,6 +13,70 @@ describe('EditorToolbar', () => {
       <EditorToolbar ff={baseFlags} enableVisualTopbar={false} isMathActive={false} katexLoaded={false} actions={{}} />
     );
     expect(container.firstChild).toBeNull();
+  });
+
+  it('treats missing feature flags as all disabled', () => {
+    const { container } = render(
+      <EditorToolbar ff={undefined} enableVisualTopbar={true} isMathActive={false} katexLoaded={false} actions={{}} />
+    );
+    expect(container.querySelectorAll('button').length).toBe(0);
+  });
+
+  it('shows zoom controls and clamps/rounds zoom changes', () => {
+    const onZoomChange = vi.fn();
+    render(
+      <EditorToolbar
+        ff={baseFlags}
+        enableVisualTopbar={true}
+        isMathActive={false}
+        katexLoaded={false}
+        zoom={1}
+        onZoomChange={onZoomChange}
+        actions={{}}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom Out'));
+    expect(onZoomChange).toHaveBeenCalledWith(0.9);
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom In'));
+    expect(onZoomChange).toHaveBeenCalledWith(1.1);
+
+    fireEvent.mouseDown(screen.getByTitle('Reset Zoom'));
+    expect(onZoomChange).toHaveBeenCalledWith(1);
+  });
+
+  it('clamps zoom within bounds', () => {
+    const onZoomChange = vi.fn();
+    const { rerender } = render(
+      <EditorToolbar
+        ff={baseFlags}
+        enableVisualTopbar={true}
+        isMathActive={false}
+        katexLoaded={false}
+        zoom={0.5}
+        onZoomChange={onZoomChange}
+        actions={{}}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom Out'));
+    expect(onZoomChange).toHaveBeenCalledWith(0.5);
+
+    rerender(
+      <EditorToolbar
+        ff={baseFlags}
+        enableVisualTopbar={true}
+        isMathActive={false}
+        katexLoaded={false}
+        zoom={2}
+        onZoomChange={onZoomChange}
+        actions={{}}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom In'));
+    expect(onZoomChange).toHaveBeenCalledWith(2);
   });
 
   it('renders an empty toolbar when no feature flags enabled', () => {
@@ -69,6 +108,15 @@ describe('EditorToolbar', () => {
     expect(insertMathElement).toHaveBeenCalledWith(false);
   });
 
+  it('renders Page Break even without handler (no crash)', () => {
+    const ff = { ...baseFlags, showNewPage: true };
+    render(
+      <EditorToolbar ff={ff} enableVisualTopbar={true} isMathActive={false} katexLoaded={false} actions={{}} />
+    );
+    const btn = screen.getByTitle(/Page Break/i);
+    expect(() => fireEvent.mouseDown(btn)).not.toThrow();
+  });
+
   it('applies active styling to math buttons when math is active', () => {
     const ff = { ...baseFlags, showInlineMath: true };
     const insertMathElement = vi.fn();
@@ -84,6 +132,11 @@ describe('EditorToolbar', () => {
   it('renders all enabled sections and wires actions', () => {
     const execCmd = vi.fn();
     const insertMathElement = vi.fn();
+    const insertInlineCode = vi.fn();
+    const insertCodeBlock = vi.fn();
+    const insertHSpace = vi.fn();
+    const insertVSpace = vi.fn();
+    const insertNewPage = vi.fn();
     const insertLink = vi.fn();
     const insertImage = vi.fn();
 
@@ -93,7 +146,17 @@ describe('EditorToolbar', () => {
         enableVisualTopbar={true}
         isMathActive={false}
         katexLoaded={false}
-        actions={{ execCmd, insertMathElement, insertLink, insertImage }}
+        actions={{
+          execCmd,
+          insertMathElement,
+          insertInlineCode,
+          insertCodeBlock,
+          insertHSpace,
+          insertVSpace,
+          insertNewPage,
+          insertLink,
+          insertImage,
+        }}
       />
     );
 
@@ -117,6 +180,9 @@ describe('EditorToolbar', () => {
     clickByTitle('Code Block');
     clickByTitle('Inline Math ($...$)');
     clickByTitle('Display Math (\\[...\\])');
+    fireEvent.mouseDown(screen.getByTitle(/Horizontal Space/i));
+    fireEvent.mouseDown(screen.getByTitle(/Vertical Space/i));
+    fireEvent.mouseDown(screen.getByTitle(/Page Break/i));
     clickByTitle('Bullet List');
     clickByTitle('Numbered List');
     clickByTitle('Increase Indent');
@@ -145,10 +211,15 @@ describe('EditorToolbar', () => {
 
     expect(insertMathElement).toHaveBeenCalledWith(false);
     expect(insertMathElement).toHaveBeenCalledWith(true);
+    expect(insertInlineCode).toHaveBeenCalledTimes(1);
+    expect(insertCodeBlock).toHaveBeenCalledTimes(1);
+    expect(insertHSpace).toHaveBeenCalledTimes(1);
+    expect(insertVSpace).toHaveBeenCalledTimes(1);
+    expect(insertNewPage).toHaveBeenCalledTimes(1);
     expect(insertLink).toHaveBeenCalledTimes(1);
     expect(insertImage).toHaveBeenCalledTimes(1);
 
-    expect(container.querySelectorAll('div.h-4.w-px').length).toBe(7);
+    expect(container.querySelectorAll('div.h-4.w-px').length).toBe(8);
   });
 
   it('does not render dividers when no later groups are visible', () => {

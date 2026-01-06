@@ -6,7 +6,7 @@
 export const ENABLE_VISUAL_TOPBAR = true;
 
 // Per-button visibility flags for the visual editor toolbar
-export const FEATURE_FLAGS = {
+export const FEATURE_FLAGS = Object.freeze({
 	// History
 	showUndo: true,
 	showRedo: true,
@@ -27,36 +27,35 @@ export const FEATURE_FLAGS = {
 	showAlignLeft: true,
 	showAlignCenter: true,
 	showAlignRight: true,
-	showAlignJustify: false,
+	showAlignJustify: true,
 
 	// Code / Math
-	showInlineCode: false,
-	showCodeBlock: false,
+	showInlineCode: true,
+	showCodeBlock: true,
 	showInlineMath: true,
 	showDisplayMath: true,
+
+	// Manual spacing
+	showHSpace: true,
+	showVSpace: true,
+	showNewPage: true,
 
 	// Lists
 	showUnorderedList: true,
 	showOrderedList: true,
 
 	// Indentation
-	showIndent: false,
-	showOutdent: false,
+	showIndent: true,
+	showOutdent: true,
 
 	// Links / Media
-	showLink: false,
-	showImage: false,
-};
+	showLink: true,
+	showImage: true,
+});
 
 // Placeholder flags for future features (default: disabled)
 // Each flag corresponds to a planned capability; flip to true when implemented.
-export const FUTURE_FEATURE_FLAGS = {
-	// Structure / Scaffolding
-	enableDocScaffolding: false,           // \documentclass, \begin{document} wrappers
-	enableMetadataPreamble: false,         // \title, \author, \maketitle
-	enableSectionHeaders: false,           // \section, \subsection, \subsubsection
-	enableUnnumberedSections: false,       // \section*
-
+export const FUTURE_FEATURE_FLAGS = Object.freeze({
 	// Formatting
 	enableBasicTextStyling: false,         // \bf, \it, \tt, \em
 	enableFontSizing: false,               // \tiny ... \Huge
@@ -95,14 +94,6 @@ export const FUTURE_FEATURE_FLAGS = {
 	// Inline / Code
 	enableInlineCode: false,               // inline \minted or \texttt proxy
 
-	// Math Engine / Symbols
-	enableMathBlockCenter: false,          // displaymath / equation
-	enableFractionsRoots: false,           // \frac, \sqrt
-	enableSubSuperscript: false,           // ^ and _
-	enableSumIntegrals: false,             // \sum, \int, \prod
-	enableGreekAlphabet: false,            // \alpha, \beta, \Delta, ...
-	enableMultiLineMath: false,            // eqnarray / aligned displays
-  
 	// Generators
 	enableTableOfContents: false,          // \tableofcontents
-};
+});

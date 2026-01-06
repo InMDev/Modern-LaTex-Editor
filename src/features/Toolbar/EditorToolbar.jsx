@@ -51,10 +51,81 @@ function Radical({ size = 16, color = 'currentColor', ...props }) {
   );
 }
 
+function HSpaceIcon({ size = 16, color = 'currentColor', ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 12h16" />
+      <path d="M8 8l-4 4 4 4" />
+      <path d="M16 8l4 4-4 4" />
+    </svg>
+  );
+}
+
+function VSpaceIcon({ size = 16, color = 'currentColor', ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 4v16" />
+      <path d="M8 8l4-4 4 4" />
+      <path d="M8 16l4 4 4-4" />
+    </svg>
+  );
+}
+
+function PageBreakIcon({ size = 16, color = 'currentColor', ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 7h16" />
+      <path d="M4 17h16" />
+      <path d="M4 12h2" />
+      <path d="M8 12h2" />
+      <path d="M12 12h2" />
+      <path d="M16 12h2" />
+      <path d="M20 12h0" />
+    </svg>
+  );
+}
+
 export default function EditorToolbar({
-  ff,
+  ff = {},
   enableVisualTopbar,
   isMathActive,
+  isInlineCodeActive = false,
   katexLoaded,
   zoom,
   onZoomChange,
@@ -67,6 +138,7 @@ export default function EditorToolbar({
   const showTextStyles = (ff.showBold || ff.showItalic || ff.showUnderline) && enableVisualTopbar;
   const showAlignment = (ff.showAlignLeft || ff.showAlignCenter || ff.showAlignRight || ff.showAlignJustify) && enableVisualTopbar;
   const showCodeMath = (ff.showInlineCode || ff.showCodeBlock || ff.showInlineMath || ff.showDisplayMath) && enableVisualTopbar;
+  const showSpacing = (ff.showHSpace || ff.showVSpace || ff.showNewPage) && enableVisualTopbar;
   const showLists = (ff.showUnorderedList || ff.showOrderedList) && enableVisualTopbar;
   const showIndentation = (ff.showIndent || ff.showOutdent) && enableVisualTopbar;
   const showLinksMedia = (ff.showLink || ff.showImage) && enableVisualTopbar;
@@ -78,7 +150,7 @@ export default function EditorToolbar({
           <>
             {ff.showUndo && <ToolbarButton icon={Undo} onClick={() => actions.execCmd('undo')} title="Undo" />}
             {ff.showRedo && <ToolbarButton icon={Redo} onClick={() => actions.execCmd('redo')} title="Redo" />}
-            {(showHeadings || showTextStyles || showCodeMath || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
+            {(showHeadings || showTextStyles || showCodeMath || showSpacing || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
           </>
         )}
 
@@ -89,7 +161,7 @@ export default function EditorToolbar({
             {ff.showHeading2 && <ToolbarButton icon={Heading2} onClick={() => actions.execCmd('formatBlock', 'H2')} title="Heading 2" />}
             {ff.showHeading3 && <ToolbarButton icon={Heading3} onClick={() => actions.execCmd('formatBlock', 'H3')} title="Heading 3" />}
             {ff.showHeading4 && <ToolbarButton icon={Heading4} onClick={() => actions.execCmd('formatBlock', 'H4')} title="Heading 4" />}
-            {(showTextStyles || showAlignment || showCodeMath || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
+            {(showTextStyles || showAlignment || showCodeMath || showSpacing || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
           </>
         )}
 
@@ -98,7 +170,7 @@ export default function EditorToolbar({
             {ff.showBold && <ToolbarButton icon={Bold} onClick={() => actions.execCmd('bold')} title="Bold" />}
             {ff.showItalic && <ToolbarButton icon={Italic} onClick={() => actions.execCmd('italic')} title="Italic" />}
             {ff.showUnderline && <ToolbarButton icon={Underline} onClick={() => actions.execCmd('underline')} title="Underline" />}
-            {(showAlignment || showCodeMath || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
+            {(showAlignment || showCodeMath || showSpacing || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
           </>
         )}
 
@@ -108,16 +180,25 @@ export default function EditorToolbar({
             {ff.showAlignCenter && <ToolbarButton icon={AlignCenter} onClick={() => actions.execCmd('justifyCenter')} title="Align Center" />}
             {ff.showAlignRight && <ToolbarButton icon={AlignRight} onClick={() => actions.execCmd('justifyRight')} title="Align Right" />}
             {ff.showAlignJustify && <ToolbarButton icon={AlignJustify} onClick={() => actions.execCmd('justifyFull')} title="Justify" />}
-            {(showCodeMath || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
+            {(showCodeMath || showSpacing || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
           </>
         )}
 
         {showCodeMath && (
           <>
-            {ff.showInlineCode && <ToolbarButton icon={Code} onClick={() => {}} title="Inline Code" />}
-            {ff.showCodeBlock && <ToolbarButton icon={SquareTerminal} onClick={() => {}} title="Code Block" />}
+            {ff.showInlineCode && <ToolbarButton icon={Code} onClick={() => actions.insertInlineCode?.()} active={isInlineCodeActive} title="Inline Code" />}
+            {ff.showCodeBlock && <ToolbarButton icon={SquareTerminal} onClick={() => actions.insertCodeBlock?.()} title="Code Block" />}
             {ff.showInlineMath && <ToolbarButton icon={Radical} onClick={() => actions.insertMathElement(false)} active={isMathActive} title="Inline Math ($...$)" />}
             {ff.showDisplayMath && <ToolbarButton icon={FunctionSquare} onClick={() => actions.insertMathElement(true)} active={isMathActive} title="Display Math (\[...\])" />}
+            {(showSpacing || showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
+          </>
+        )}
+
+        {showSpacing && (
+          <>
+            {ff.showHSpace && <ToolbarButton icon={HSpaceIcon} onClick={() => actions.insertHSpace?.()} title="Horizontal Space (\\hspace{...})" />}
+            {ff.showVSpace && <ToolbarButton icon={VSpaceIcon} onClick={() => actions.insertVSpace?.()} title="Vertical Space (\\vspace{...})" />}
+            {ff.showNewPage && <ToolbarButton icon={PageBreakIcon} onClick={() => actions.insertNewPage?.()} title="Page Break (\\newpage)" />}
             {(showLists || showIndentation || showLinksMedia) && <ToolbarDivider />}
           </>
         )}

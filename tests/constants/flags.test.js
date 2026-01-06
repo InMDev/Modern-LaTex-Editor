@@ -6,14 +6,65 @@ describe('constants/flags', () => {
     expect(typeof ENABLE_VISUAL_TOPBAR).toBe('boolean');
   });
 
-  it('FEATURE_FLAGS exposes expected keys', () => {
-    expect(FEATURE_FLAGS).toHaveProperty('showBold');
-    expect(FEATURE_FLAGS).toHaveProperty('showInlineMath');
-    expect(FEATURE_FLAGS).toHaveProperty('showDisplayMath');
+  it('FEATURE_FLAGS is frozen and contains only boolean values', () => {
+    expect(Object.isFrozen(FEATURE_FLAGS)).toBe(true);
+    for (const [key, value] of Object.entries(FEATURE_FLAGS)) {
+      expect(typeof key).toBe('string');
+      expect(typeof value).toBe('boolean');
+    }
   });
 
-  it('FUTURE_FEATURE_FLAGS is an object of booleans', () => {
-    const allBooleans = Object.values(FUTURE_FEATURE_FLAGS).every(v => typeof v === 'boolean');
-    expect(allBooleans).toBe(true);
+  it('FEATURE_FLAGS exposes the expected toolbar keys', () => {
+    const expectedKeys = [
+      'showUndo',
+      'showRedo',
+      'showHeading1',
+      'showHeading2',
+      'showHeading3',
+      'showHeading4',
+      'showTitle',
+      'showBold',
+      'showItalic',
+      'showUnderline',
+      'showAlignLeft',
+      'showAlignCenter',
+      'showAlignRight',
+      'showAlignJustify',
+      'showInlineCode',
+      'showCodeBlock',
+      'showInlineMath',
+      'showDisplayMath',
+      'showHSpace',
+      'showVSpace',
+      'showNewPage',
+      'showUnorderedList',
+      'showOrderedList',
+      'showIndent',
+      'showOutdent',
+      'showLink',
+      'showImage',
+    ];
+
+    expect(Object.keys(FEATURE_FLAGS).sort()).toEqual(expectedKeys.sort());
+  });
+
+  it('FEATURE_FLAGS cannot be mutated at runtime', () => {
+    expect(() => {
+      // @ts-expect-error - intentional mutation attempt
+      FEATURE_FLAGS.showBold = false;
+    }).toThrow(TypeError);
+
+    expect(() => {
+      // @ts-expect-error - intentional mutation attempt
+      FEATURE_FLAGS.newFlag = true;
+    }).toThrow(TypeError);
+  });
+
+  it('FUTURE_FEATURE_FLAGS is frozen and contains only disabled booleans by default', () => {
+    expect(Object.isFrozen(FUTURE_FEATURE_FLAGS)).toBe(true);
+    for (const value of Object.values(FUTURE_FEATURE_FLAGS)) {
+      expect(typeof value).toBe('boolean');
+      expect(value).toBe(false);
+    }
   });
 });

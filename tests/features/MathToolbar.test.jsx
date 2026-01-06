@@ -9,6 +9,38 @@ describe('MathToolbar', () => {
     expect(screen.getByText('Equation Tools')).toBeTruthy();
   });
 
+  it('does not show zoom controls when zoom props are missing', () => {
+    render(<MathToolbar onInsert={() => {}} katexLoaded={false} />);
+    expect(screen.queryByTitle('Zoom Out')).toBeNull();
+    expect(screen.queryByTitle('Zoom In')).toBeNull();
+    expect(screen.queryByTitle('Reset Zoom')).toBeNull();
+  });
+
+  it('shows zoom controls and clamps/rounds zoom changes', () => {
+    const onZoomChange = vi.fn();
+    render(<MathToolbar onInsert={() => {}} katexLoaded={false} zoom={1} onZoomChange={onZoomChange} />);
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom Out'));
+    expect(onZoomChange).toHaveBeenCalledWith(0.9);
+
+    fireEvent.mouseDown(screen.getByTitle('Zoom In'));
+    expect(onZoomChange).toHaveBeenCalledWith(1.1);
+
+    fireEvent.mouseDown(screen.getByTitle('Reset Zoom'));
+    expect(onZoomChange).toHaveBeenCalledWith(1);
+  });
+
+  it('clamps zoom within bounds', () => {
+    const onZoomChange = vi.fn();
+    const { rerender } = render(<MathToolbar onInsert={() => {}} katexLoaded={false} zoom={0.5} onZoomChange={onZoomChange} />);
+    fireEvent.mouseDown(screen.getByTitle('Zoom Out'));
+    expect(onZoomChange).toHaveBeenCalledWith(0.5);
+
+    rerender(<MathToolbar onInsert={() => {}} katexLoaded={false} zoom={2} onZoomChange={onZoomChange} />);
+    fireEvent.mouseDown(screen.getByTitle('Zoom In'));
+    expect(onZoomChange).toHaveBeenCalledWith(2);
+  });
+
   it('invokes onInsert for structure symbol', () => {
     const onInsert = vi.fn();
     render(<MathToolbar onInsert={onInsert} katexLoaded={false} />);

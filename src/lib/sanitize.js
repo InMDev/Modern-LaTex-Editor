@@ -21,6 +21,9 @@ const ALLOWED_TAGS = new Set([
   'br',
   'input',
   'textarea',
+  'select',
+  'option',
+  'blockquote',
   // MathML (KaTeX accessibility tree) — keep these to avoid mangling output
   'math',
   'mrow',
@@ -51,13 +54,31 @@ const ALLOWED_TAGS = new Set([
   'mlabeledtr',
 ]);
 
-const GLOBAL_ATTRS = new Set(['class', 'style', 'contenteditable', 'data-latex', 'title', 'aria-hidden', 'role']);
+const GLOBAL_ATTRS = new Set([
+  'class',
+  'style',
+  'contenteditable',
+  'data-latex',
+  'data-texure-latex',
+  'data-texure-code-lang',
+  'data-texure-code',
+  'data-texure-image-id',
+  'data-texure-img-width',
+  'data-texure-img-angle',
+  'data-texure-img-x',
+  'data-texure-img-y',
+  'title',
+  'aria-hidden',
+  'role',
+]);
 
 const TAG_ATTRS = {
   a: new Set(['href', 'target', 'rel', ...GLOBAL_ATTRS]),
   img: new Set(['src', 'alt', ...GLOBAL_ATTRS]),
   input: new Set(['type', 'disabled', 'value', ...GLOBAL_ATTRS]),
   textarea: new Set(['value', ...GLOBAL_ATTRS]),
+  select: new Set(['value', ...GLOBAL_ATTRS]),
+  option: new Set(['value', 'selected', ...GLOBAL_ATTRS]),
   // Allow a conservative set of MathML attributes used by KaTeX
   math: new Set(['xmlns', 'display', 'overflow', ...GLOBAL_ATTRS]),
   mrow: new Set(['displaystyle', 'scriptlevel', ...GLOBAL_ATTRS]),
@@ -89,7 +110,14 @@ const BASE_ALLOWED_STYLES = new Set([
   'text-align',
   'font-family',
   'font-size',
+  'width',
+  'height',
   'max-width',
+  'margin-left',
+  'margin-right',
+  'padding-left',
+  'padding-right',
+  'text-indent',
 ]);
 
 // KaTeX relies on a small set of inline styles for vertical layout (fractions, scripts, radicals).
@@ -129,7 +157,9 @@ const KATEX_LENGTH_PROPS = new Set([
 ]);
 
 const SAFE_URL_RE = /^(https?:|mailto:|tel:|#|\/|\.{1,2}\/)/i;
-const SAFE_IMG_SRC_RE = /^(https?:|\/|\.{1,2}\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);)/i;
+// Allow: https, blob URLs, absolute/relative paths, and data:image.
+// For local project assets (e.g. `images/a.png`), allow simple relative paths that do not contain a scheme (`:`).
+const SAFE_IMG_SRC_RE = /^(https?:|blob:|\/|\.{1,2}\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);|[a-z0-9][^:\s]*$)/i;
 
 const SAFE_LENGTH_RE = /^-?(?:\d+|\d*\.\d+)(?:em|ex|mu|pt|px|rem|%)$/i;
 const SAFE_ZERO_RE = /^-?0(?:\.0+)?$/;
@@ -151,6 +181,17 @@ const sanitizeStyle = (styleText, { allowKatex = false } = {}) => {
     if (allowKatex) {
       if (KATEX_LENGTH_PROPS.has(prop) && !isSafeLength(value)) continue;
       if (prop === 'border-style' && value.toLowerCase() !== 'solid') continue;
+    } else {
+      if (
+        (prop === 'width' ||
+          prop === 'height' ||
+          prop === 'margin-left' ||
+          prop === 'margin-right' ||
+          prop === 'padding-left' ||
+          prop === 'padding-right' ||
+          prop === 'text-indent') &&
+        !isSafeLength(value)
+      ) continue;
     }
 
     out.push(`${prop}: ${value}`);
