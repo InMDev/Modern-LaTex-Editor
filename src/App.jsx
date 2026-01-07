@@ -37,6 +37,16 @@ export default function LiveLatexEditor() {
   const [latexCode, setLatexCode] = useState(DEFAULT_LATEX);
   const [htmlContent, setHtmlContent] = useState("");
   const [activeTab, setActiveTab] = useState('both'); 
+  const [splitPreviewMode, setSplitPreviewMode] = useState('visual'); // visual | pdf
+  const [splitPct, setSplitPct] = useState(() => {
+    try {
+      const raw = localStorage.getItem('texure.splitPct');
+      const n = raw != null ? Number(raw) : NaN;
+      return Number.isFinite(n) ? Math.max(15, Math.min(85, n)) : 50;
+    } catch {
+      return 50;
+    }
+  });
   const visualEditorRef = useRef(null);
   const visualScrollRef = useRef(null);
   const lastSource = useRef(null); 
@@ -80,6 +90,18 @@ export default function LiveLatexEditor() {
   const katexLinkInserted = useRef(false);
   const katexScriptInserted = useRef(false);
 
+  const splitContainerRef = useRef(null);
+  const splitDraggingRef = useRef(false);
+  const splitLastRectRef = useRef(null);
+
+  const [pdfAutoRefresh, setPdfAutoRefresh] = useState(true);
+  const [pdfStatus, setPdfStatus] = useState('idle'); // idle | compiling | success | error
+  const [pdfError, setPdfError] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
+  const pdfLastCodeRef = useRef('');
+  const pdfReqIdRef = useRef(0);
+  const pdfDebounceRef = useRef(null);
+
   const focusMathInput = (el) => {
     if (!el) return;
     try {
@@ -100,6 +122,17 @@ export default function LiveLatexEditor() {
       } catch { /* ignore */ }
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pdfDebounceRef.current) {
+        try { clearTimeout(pdfDebounceRef.current); } catch { /* ignore */ }
+      }
+      if (pdfUrl) {
+        try { URL.revokeObjectURL(pdfUrl); } catch { /* ignore */ }
+      }
+    };
+  }, [pdfUrl]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.katex) {
@@ -229,9 +262,12 @@ export default function LiveLatexEditor() {
     setHtmlContent(sanitizeEditorHtml(latexToHtml(latexCode)));
   }, [katexLoaded]);
 
+  const isVisualSurfaceVisible =
+    activeTab === 'visual' || (activeTab === 'both' && splitPreviewMode === 'visual');
+
   useEffect(() => {
-    if (activeTab === 'latex') clearImageSelection();
-  }, [activeTab]);
+    if (!isVisualSurfaceVisible) clearImageSelection();
+  }, [isVisualSurfaceVisible]);
 
   // Sync: LaTeX -> Visual
   useEffect(() => {
@@ -1855,6 +1891,181 @@ export default function LiveLatexEditor() {
     }
   };
 
+  const isPdfPreviewVisible =
+    activeTab === 'pdf' || (activeTab === 'both' && splitPreviewMode === 'pdf');
+
+  const normalizeLatexForPdfPreview = (input) => {
+    let out = String(input || '');
+
+    // Avoid xcolor errors when "transparent" is accidentally used as a color name.
+    out = out.replace(/\\colorbox\{transparent\}\{([^}]*)\}/gi, '$1');
+    out = out.replace(/\\textcolor\{transparent\}\{([^}]*)\}/gi, '$1');
+
+    // Convert minted to listings to avoid pygmentize/shell-escape requirements on remote compilers.
+    out = out.replace(/\\begin\{minted\}(?:\[[^\]]*\])?\{([^}]*)\}([\s\S]*?)\\end\{minted\}/g, (_, lang, body) => {
+      const code = String(body || '').replace(/^\n/, '').replace(/\n$/, '');
+      const safeLang = String(lang || '').trim();
+      const opt = safeLang ? `[language=${safeLang}]` : '';
+      return `\\begin{lstlisting}${opt}\n${code}\n\\end{lstlisting}`;
+    });
+    out = out.replace(/\\mintinline(?:\[[^\]]*\])?\{([^}]*)\}([^\s])([\s\S]*?)\2/g, (_, _lang, _delim, code) => {
+      return `\\texttt{${escapeLatex(String(code || ''))}}`;
+    });
+    out = out.replace(/\\mintinline(?:\[[^\]]*\])?\{([^}]*)\}\{([\s\S]*?)\}/g, (_, _lang, code) => {
+      return `\\texttt{${escapeLatex(String(code || ''))}}`;
+    });
+    out = out.replace(/^\s*\\usepackage(?:\[[^\]]*\])?\{minted\}\s*$/gmi, '');
+
+    if (/\\begin\{lstlisting\}/.test(out) && !/\\usepackage(?:\[[^\]]*\])?\{listings\}/.test(out)) {
+      const insertPoint = out.indexOf('\\begin{document}');
+      if (insertPoint !== -1) {
+        out = out.slice(0, insertPoint) + '\\usepackage{listings}\n' + out.slice(insertPoint);
+      }
+    }
+
+    return out;
+  };
+
+  const compileLatexToPdfBlobForPreview = async (latex, { timeoutMs = 25000 } = {}) => {
+    const code = String(latex || '');
+
+    // Prefer in-browser WASM compile when available.
+    if (USE_WASM_LATEX && isWasmLatexEngineConfigured()) {
+      const blob = await compileWithWasmLatex(code);
+      if (blob && blob.size > 0) return blob;
+    }
+
+    // Attempt 1: latexonline.cc via proxy
+    let latexonlineLog = '';
+    try {
+      const res = await fetchWithTimeout(
+        `/api/latexonline/compile?text=${encodeURIComponent(code)}`,
+        { method: 'GET' },
+        timeoutMs
+      );
+      if (res.ok && res.headers.get('content-type')?.includes('pdf')) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) return blob;
+      }
+      latexonlineLog = await res.text().catch(() => '');
+    } catch (e) {
+      latexonlineLog = String(e?.message || e || '');
+    }
+
+    // Attempt 2: rtex.probably.rocks via proxy (only if enabled)
+    if (!ENABLE_RTEX) {
+      throw new Error(
+        latexonlineLog ||
+          'latexonline.cc failed and fallback compiler (RTeX) is disabled. Enable VITE_ENABLE_RTEX or configure VITE_USE_WASM_LATEX.'
+      );
+    }
+
+    const r = await fetchWithTimeout(
+      '/api/rtex/api/v2',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, format: 'pdf' }),
+      },
+      timeoutMs
+    );
+    const data = await readJSONSafe(r);
+    if (data?.status === 'success' && data?.result) {
+      const byteChars = atob(data.result);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      const byteArray = new Uint8Array(byteNumbers);
+      return new Blob([byteArray], { type: 'application/pdf' });
+    }
+    const log = data?.log || data?.error || data?.message || 'Unknown compilation error';
+    throw new Error(log);
+  };
+
+  const refreshPdfPreview = async ({ force = false } = {}) => {
+    if (!isPdfPreviewVisible) return;
+    const exportLatex = normalizeLatexForPdfPreview(latexCode);
+    if (!force && exportLatex === pdfLastCodeRef.current && pdfUrl) return;
+
+    const reqId = ++pdfReqIdRef.current;
+    setPdfStatus('compiling');
+    setPdfError('');
+    try {
+      const blob = await compileLatexToPdfBlobForPreview(exportLatex);
+      if (reqId !== pdfReqIdRef.current) return;
+      if (!blob || blob.size <= 0) throw new Error('Compiler returned an empty PDF.');
+      const nextUrl = URL.createObjectURL(blob);
+      setPdfUrl(nextUrl);
+      pdfLastCodeRef.current = exportLatex;
+      setPdfStatus('success');
+    } catch (e) {
+      if (reqId !== pdfReqIdRef.current) return;
+      setPdfStatus('error');
+      setPdfError(String(e?.message || e || 'PDF compilation failed.'));
+    }
+  };
+
+  useEffect(() => {
+    if (!isPdfPreviewVisible) return;
+    if (!pdfAutoRefresh) return;
+    if (pdfDebounceRef.current) clearTimeout(pdfDebounceRef.current);
+    pdfDebounceRef.current = setTimeout(() => {
+      refreshPdfPreview({ force: false });
+    }, 1200);
+    return () => {
+      if (pdfDebounceRef.current) clearTimeout(pdfDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latexCode, isPdfPreviewVisible, pdfAutoRefresh]);
+
+  useEffect(() => {
+    if (!isPdfPreviewVisible) return;
+    refreshPdfPreview({ force: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPdfPreviewVisible]);
+
+  const clampSplitPct = (pct) => {
+    const n = Number(pct);
+    if (!Number.isFinite(n)) return 50;
+    return Math.max(15, Math.min(85, n));
+  };
+
+  const updateSplitFromClientX = (clientX) => {
+    const container = splitContainerRef.current;
+    if (!container) return;
+    const rect = splitLastRectRef.current || container.getBoundingClientRect();
+    if (!rect || !rect.width) return;
+    const next = clampSplitPct(((clientX - rect.left) / rect.width) * 100);
+    setSplitPct(next);
+    try { localStorage.setItem('texure.splitPct', String(next)); } catch { /* ignore */ }
+  };
+
+  const startSplitDrag = (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const container = splitContainerRef.current;
+    if (!container) return;
+    splitDraggingRef.current = true;
+    splitLastRectRef.current = container.getBoundingClientRect();
+    updateSplitFromClientX(e.clientX);
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+    try { document.documentElement.style.cursor = 'col-resize'; } catch { /* ignore */ }
+  };
+
+  const moveSplitDrag = (e) => {
+    if (!splitDraggingRef.current) return;
+    e.preventDefault();
+    updateSplitFromClientX(e.clientX);
+  };
+
+  const endSplitDrag = (e) => {
+    if (!splitDraggingRef.current) return;
+    e?.preventDefault?.();
+    splitDraggingRef.current = false;
+    splitLastRectRef.current = null;
+    try { document.documentElement.style.cursor = ''; } catch { /* ignore */ }
+  };
+
   // Export LaTeX to PDF via online compiler services
   const exportAsPDF = async () => {
     if (exporting) return;
@@ -2106,16 +2317,44 @@ export default function LiveLatexEditor() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-          {['latex', 'both', 'visual'].map(mode => (
-            <button 
-              key={mode}
-              onClick={() => setActiveTab(mode)}
-              className={`px-3 py-1 text-xs uppercase font-bold tracking-wide rounded-md transition-all ${activeTab === mode ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {mode}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+            {[
+              { key: 'latex', label: 'Source' },
+              { key: 'both', label: 'Split' },
+              { key: 'visual', label: 'Visual' },
+              { key: 'pdf', label: 'PDF' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`px-3 py-1 text-xs uppercase font-bold tracking-wide rounded-md transition-all ${
+                  activeTab === key ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'both' && (
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg" aria-label="Preview mode">
+              {[
+                { key: 'visual', label: 'Visual' },
+                { key: 'pdf', label: 'PDF' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setSplitPreviewMode(key)}
+                  className={`px-3 py-1 text-xs uppercase font-bold tracking-wide rounded-md transition-all ${
+                    splitPreviewMode === key ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         
@@ -2158,11 +2397,14 @@ export default function LiveLatexEditor() {
       </header>
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div ref={splitContainerRef} className="flex flex-1 overflow-hidden relative">
         
         {/* LEFT: LaTeX */}
         {(activeTab === 'latex' || activeTab === 'both') && (
-          <div className={`flex flex-col border-r border-slate-200 ${activeTab === 'both' ? 'w-1/2' : 'w-full'} bg-slate-900`}>
+          <div
+            className={`flex flex-col border-r border-slate-200 bg-slate-900 ${activeTab === 'both' ? 'flex-shrink-0 min-w-0' : 'w-full'}`}
+            style={activeTab === 'both' ? { flexBasis: `${splitPct}%` } : undefined}
+          >
             <div className="flex items-center justify-between px-4 py-1.5 bg-slate-800 border-b border-slate-700 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
               <span className="flex items-center gap-2"><Code size={12}/> Source</span>
             </div>
@@ -2178,9 +2420,37 @@ export default function LiveLatexEditor() {
           </div>
         )}
 
+        {/* SPLIT DIVIDER */}
+        {activeTab === 'both' && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={startSplitDrag}
+            onPointerMove={moveSplitDrag}
+            onPointerUp={endSplitDrag}
+            onPointerCancel={endSplitDrag}
+            onLostPointerCapture={endSplitDrag}
+            style={{ touchAction: 'none' }}
+            className="group w-3 z-10 cursor-col-resize bg-slate-200 hover:bg-slate-300 active:bg-slate-400 transition-colors select-none flex items-center justify-center border-l border-r border-slate-300"
+            title="Drag to resize panes"
+            aria-label="Resize split panes"
+          >
+            <div className="h-14 w-5 rounded-md bg-slate-100/80 group-hover:bg-white shadow-sm border border-slate-300 flex items-center justify-center">
+              <div className="flex flex-col gap-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* RIGHT: Visual */}
-        {(activeTab === 'visual' || activeTab === 'both') && (
-          <div className={`flex flex-col ${activeTab === 'both' ? 'w-1/2' : 'w-full'} bg-white`}>
+        {(activeTab === 'visual' || (activeTab === 'both' && splitPreviewMode === 'visual')) && (
+          <div
+            className={`flex flex-col bg-white ${activeTab === 'both' ? 'flex-shrink-0 min-w-0' : 'w-full'}`}
+            style={activeTab === 'both' ? { flexBasis: `${100 - splitPct}%` } : undefined}
+          >
             
             {/* Context Aware Toolbar */}
             <RibbonToolbar
@@ -2242,6 +2512,77 @@ export default function LiveLatexEditor() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* RIGHT: PDF */}
+        {(activeTab === 'pdf' || (activeTab === 'both' && splitPreviewMode === 'pdf')) && (
+          <div
+            className={`flex flex-col bg-white ${activeTab === 'both' ? 'flex-shrink-0 min-w-0' : 'w-full'}`}
+            style={activeTab === 'both' ? { flexBasis: `${100 - splitPct}%` } : undefined}
+          >
+            <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    pdfStatus === 'compiling'
+                      ? 'bg-amber-400 animate-pulse'
+                      : pdfStatus === 'error'
+                        ? 'bg-red-500'
+                        : pdfStatus === 'success'
+                          ? 'bg-emerald-500'
+                          : 'bg-slate-300'
+                  }`}
+                ></span>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-600 truncate">
+                  PDF Preview
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-slate-700 select-none cursor-pointer">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                    Auto Compile
+                  </span>
+                  <span className="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={pdfAutoRefresh}
+                      onChange={(e) => setPdfAutoRefresh(e.target.checked)}
+                      className="peer sr-only"
+                      aria-label="Auto Compile"
+                    />
+                    <span className="h-5 w-9 rounded-full bg-slate-300 peer-checked:bg-blue-600 transition-colors" />
+                    <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm border border-slate-200 transition-transform peer-checked:translate-x-4" />
+                  </span>
+                </label>
+                <button
+                  onClick={() => refreshPdfPreview({ force: true })}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white text-slate-700 rounded-md hover:bg-slate-100 transition-colors text-xs font-medium border border-slate-200"
+                  title="Refresh PDF preview"
+                >
+                  <RotateCw size={14} /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {pdfStatus === 'error' && (
+              <div className="px-4 py-3 border-b border-slate-200 bg-red-50 text-red-700 text-xs whitespace-pre-wrap break-words">
+                {pdfError || 'PDF compilation failed.'}
+              </div>
+            )}
+
+            {!pdfUrl ? (
+              <div className="flex-1 flex items-center justify-center bg-slate-100 text-slate-600 text-sm">
+                <div className="max-w-lg text-center px-6">
+                  <div className="font-semibold">No PDF rendered yet</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Click Refresh or enable Live to compile your LaTeX into a real PDF preview.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <iframe title="PDF Preview" src={pdfUrl} className="flex-1 w-full bg-slate-200" />
+            )}
           </div>
         )}
       </div>
